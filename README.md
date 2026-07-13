@@ -50,7 +50,7 @@ npm run prisma:seed
 | `PAYMENT_GATEWAY_PRIVATE_KEY` | Llave privada sandbox |
 | `PAYMENT_GATEWAY_EVENTS_KEY` | Llave de eventos sandbox |
 | `PAYMENT_GATEWAY_INTEGRITY_KEY` | Llave de integridad sandbox |
-| `TRANSACTION_SYNC_INTERVAL_SECONDS` | Intervalo en segundos para el job que sincroniza pagos aprobados y descuenta stock |
+| `TRANSACTION_SYNC_INTERVAL_SECONDS` | Intervalo en segundos para el job que sincroniza pagos aprobados y descuenta stock (recomendado: 30) |
 
 ## Como correr el proyecto
 

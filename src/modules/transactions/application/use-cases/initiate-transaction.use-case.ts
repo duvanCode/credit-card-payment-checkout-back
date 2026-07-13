@@ -111,6 +111,8 @@ export class InitiateTransactionUseCase {
     );
 
     if (finalResult.status === TransactionStatus.APPROVED) {
+      await this.transactionRepository.applyApprovedEffects(persisted.toPrimitives().id);
+
       return {
         transactionId: persisted.toPrimitives().id,
         reference: persisted.toPrimitives().reference,

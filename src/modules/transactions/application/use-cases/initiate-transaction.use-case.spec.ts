@@ -81,6 +81,7 @@ describe('InitiateTransactionUseCase', () => {
     const transactionRepository = {
       create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
       update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
+      applyApprovedEffects: jest.fn().mockResolvedValue(true),
     };
     const gateway = {
       getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
@@ -115,15 +116,17 @@ describe('InitiateTransactionUseCase', () => {
     expect(
       transactionRepository.create.mock.invocationCallOrder[0],
     ).toBeLessThan(gateway.createTransaction.mock.invocationCallOrder[0]);
+    expect(transactionRepository.applyApprovedEffects).toHaveBeenCalledWith('trx-1');
   });
 
-  it('actualiza a APPROVED sin descontar stock de inmediato cuando el pago aprueba', async () => {
+  it('actualiza a APPROVED y aplica stock cuando el pago aprueba', async () => {
     const productRepository = {
       findById: jest.fn().mockResolvedValue(product),
     };
     const transactionRepository = {
       create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
       update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
+      applyApprovedEffects: jest.fn().mockResolvedValue(true),
     };
     const gateway = {
       getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
@@ -147,6 +150,7 @@ describe('InitiateTransactionUseCase', () => {
     const result = await useCase.execute(payload);
 
     expect(transactionRepository.update).toHaveBeenCalled();
+    expect(transactionRepository.applyApprovedEffects).toHaveBeenCalledWith('trx-1');
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         items: [

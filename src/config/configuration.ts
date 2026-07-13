@@ -15,7 +15,7 @@ export default () => ({
   },
   jobs: {
     transactionSyncIntervalSeconds: parseInt(
-      process.env.TRANSACTION_SYNC_INTERVAL_SECONDS ?? '300',
+      process.env.TRANSACTION_SYNC_INTERVAL_SECONDS ?? '30',
       10,
     ),
   },

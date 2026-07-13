@@ -32,6 +32,8 @@ export class TransactionSyncService implements OnModuleInit {
   }
 
   onModuleInit() {
+    void this.syncTransactions();
+
     const interval = setInterval(() => {
       void this.syncTransactions();
     }, this.intervalSeconds * 1000);
