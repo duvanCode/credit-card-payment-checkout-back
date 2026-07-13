@@ -16,8 +16,20 @@ export interface TransactionProps {
   customerLegalIdType?: string | null;
   installments: number;
   gatewayResponse?: Record<string, unknown> | null;
+  items: TransactionItemProps[];
+  stockProcessedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TransactionItemProps {
+  id?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  createdAt?: Date;
 }
 
 export class TransactionEntity {

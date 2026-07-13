@@ -4,6 +4,7 @@ import { TransactionEntity } from '../../domain/entities/transaction.entity';
 import { TransactionStatus } from '../../domain/enums/transaction-status.enum';
 import { InsufficientStockException } from '../../../../shared/exceptions/insufficient-stock.exception';
 import { PaymentRequiredException } from '../../../../shared/exceptions/payment-required.exception';
+import { SHIPPING_FEE_IN_CENTS } from '../utils/pricing.util';
 
 const product = new ProductEntity({
   id: 'prod-1',
@@ -19,15 +20,13 @@ const product = new ProductEntity({
 });
 
 const payload = {
-  productId: 'prod-1',
-  quantity: 2,
-  cardData: {
-    number: '4242424242424242',
-    holderName: 'JOHN DOE',
-    expiryMonth: '12',
-    expiryYear: '30',
-    cvc: '123',
-  },
+  items: [
+    {
+      productId: 'prod-1',
+      quantity: 2,
+    },
+  ],
+  cardToken: 'tok_stagtest_12345_abcde12345',
   customerData: {
     email: 'john@example.com',
     fullName: 'John Doe',
@@ -38,20 +37,39 @@ const payload = {
   installments: 1,
 };
 
+const subtotalAmount = product.toPrimitives().price * payload.items[0].quantity;
+const totalAmount = subtotalAmount + Math.round(subtotalAmount * 0.19) + SHIPPING_FEE_IN_CENTS;
+
 describe('InitiateTransactionUseCase', () => {
   const createTransactionEntity = (status: TransactionStatus) =>
     new TransactionEntity({
       id: 'trx-1',
-      gatewayTransactionId: status === TransactionStatus.PENDING ? null : 'gw-1',
+      gatewayTransactionId: status === TransactionStatus.PENDING ? 'gw-1' : 'gw-1',
       reference: 'TRX-1',
       productId: 'prod-1',
       quantity: 2,
-      totalAmount: 2000,
+      totalAmount,
       currency: 'COP',
       status,
       customerEmail: 'john@example.com',
       customerName: 'John Doe',
+      customerPhone: '3001234567',
+      customerLegalId: '123456789',
+      customerLegalIdType: 'CC',
       installments: 1,
+      gatewayResponse: { status },
+      items: [
+        {
+          id: 'item-1',
+          productId: 'prod-1',
+          productName: 'Laptop',
+          quantity: 2,
+          unitPrice: 1000,
+          subtotal: subtotalAmount,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+      stockProcessedAt: null,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
@@ -59,16 +77,13 @@ describe('InitiateTransactionUseCase', () => {
   it('crea transaccion PENDING antes de llamar a la pasarela', async () => {
     const productRepository = {
       findById: jest.fn().mockResolvedValue(product),
-      decrementStock: jest.fn().mockResolvedValue(product),
     };
     const transactionRepository = {
       create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
       update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
-      createDeliveryRecord: jest.fn().mockResolvedValue(undefined),
     };
     const gateway = {
       getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
-      tokenizeCard: jest.fn().mockResolvedValue('card-token'),
       createTransaction: jest.fn().mockResolvedValue({
         gatewayTransactionId: 'gw-1',
         status: TransactionStatus.APPROVED,
@@ -86,24 +101,32 @@ describe('InitiateTransactionUseCase', () => {
     await useCase.execute(payload);
 
     expect(transactionRepository.create).toHaveBeenCalled();
+    expect(transactionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        totalAmount,
+      }),
+    );
+    expect(gateway.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountInCents: totalAmount,
+        cardToken: payload.cardToken,
+      }),
+    );
     expect(
       transactionRepository.create.mock.invocationCallOrder[0],
     ).toBeLessThan(gateway.createTransaction.mock.invocationCallOrder[0]);
   });
 
-  it('actualiza a APPROVED y descuenta stock cuando el pago aprueba', async () => {
+  it('actualiza a APPROVED sin descontar stock de inmediato cuando el pago aprueba', async () => {
     const productRepository = {
       findById: jest.fn().mockResolvedValue(product),
-      decrementStock: jest.fn().mockResolvedValue(product),
     };
     const transactionRepository = {
       create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
       update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
-      createDeliveryRecord: jest.fn().mockResolvedValue(undefined),
     };
     const gateway = {
       getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
-      tokenizeCard: jest.fn().mockResolvedValue('card-token'),
       createTransaction: jest.fn().mockResolvedValue({
         gatewayTransactionId: 'gw-1',
         status: TransactionStatus.APPROVED,
@@ -117,28 +140,37 @@ describe('InitiateTransactionUseCase', () => {
       transactionRepository as never,
       gateway as never,
     );
+    jest
+      .spyOn(useCase as never, 'delay' as never)
+      .mockResolvedValue(undefined as never);
 
     const result = await useCase.execute(payload);
 
     expect(transactionRepository.update).toHaveBeenCalled();
-    expect(productRepository.decrementStock).toHaveBeenCalledWith('prod-1', 2);
-    expect(transactionRepository.createDeliveryRecord).toHaveBeenCalled();
+    expect(transactionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            productId: 'prod-1',
+            quantity: 2,
+          }),
+        ],
+      }),
+    );
     expect(result.status).toBe(TransactionStatus.APPROVED);
+    expect(result.itemsCount).toBe(1);
   });
 
-  it('actualiza a DECLINED y no descuenta stock cuando la pasarela rechaza', async () => {
+  it('actualiza a DECLINED cuando la pasarela rechaza', async () => {
     const productRepository = {
       findById: jest.fn().mockResolvedValue(product),
-      decrementStock: jest.fn(),
     };
     const transactionRepository = {
       create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
       update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.DECLINED)),
-      createDeliveryRecord: jest.fn(),
     };
     const gateway = {
       getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
-      tokenizeCard: jest.fn().mockResolvedValue('card-token'),
       createTransaction: jest.fn().mockResolvedValue({
         gatewayTransactionId: 'gw-1',
         status: TransactionStatus.DECLINED,
@@ -156,7 +188,6 @@ describe('InitiateTransactionUseCase', () => {
     await expect(useCase.execute(payload)).rejects.toBeInstanceOf(
       PaymentRequiredException,
     );
-    expect(productRepository.decrementStock).not.toHaveBeenCalled();
   });
 
   it('lanza error si no hay stock suficiente', async () => {
@@ -169,16 +200,13 @@ describe('InitiateTransactionUseCase', () => {
           }),
         ),
       ),
-      decrementStock: jest.fn(),
     };
     const transactionRepository = {
       create: jest.fn(),
       update: jest.fn(),
-      createDeliveryRecord: jest.fn(),
     };
     const gateway = {
       getAcceptanceToken: jest.fn(),
-      tokenizeCard: jest.fn(),
       createTransaction: jest.fn(),
       getTransactionStatus: jest.fn(),
     };
@@ -194,4 +222,37 @@ describe('InitiateTransactionUseCase', () => {
     );
     expect(transactionRepository.create).not.toHaveBeenCalled();
   });
+
+  it('retorna PENDING cuando la pasarela no confirma el estado final', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(product),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.PENDING,
+        rawResponse: { status: 'PENDING' },
+      }),
+      getTransactionStatus: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.PENDING,
+        rawResponse: { status: 'PENDING' },
+      }),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    const result = await useCase.execute(payload);
+
+    expect(result.status).toBe(TransactionStatus.PENDING);
+  }, 10000);
 });

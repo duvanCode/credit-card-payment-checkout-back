@@ -46,25 +46,47 @@ describe('PaymentGatewayService', () => {
     expect(token).toBe('acceptance-token');
   });
 
-  it('tokeniza una tarjeta y devuelve el token', async () => {
+  it('crea una transaccion usando el cardToken recibido del frontend', async () => {
     client.post.mockResolvedValue({
       data: {
         data: {
-          id: 'tok_test_123',
+          id: 'trx_test_123',
+          status: 'PENDING',
         },
       },
     });
 
     const service = new PaymentGatewayService(configService);
-    const token = await service.tokenizeCard({
-      number: '4242424242424242',
-      cvc: '123',
-      expMonth: '12',
-      expYear: '30',
-      cardHolder: 'JOHN DOE',
+    const response = await service.createTransaction({
+      reference: 'TRX-1',
+      amountInCents: 2000,
+      currency: 'COP',
+      customerEmail: 'john@example.com',
+      installments: 1,
+      cardToken: 'tok_stagtest_12345_abcde12345',
+      acceptanceToken: 'acceptance-token',
+      customerData: {
+        fullName: 'John Doe',
+        phoneNumber: '3001234567',
+        legalId: '123456789',
+        legalIdType: 'CC',
+      },
     });
 
-    expect(token).toBe('tok_test_123');
-    expect(client.post).toHaveBeenCalled();
+    expect(response.gatewayTransactionId).toBe('trx_test_123');
+    expect(client.post).toHaveBeenCalledWith(
+      '/transactions',
+      expect.objectContaining({
+        acceptance_token: 'acceptance-token',
+        payment_method: expect.objectContaining({
+          token: 'tok_stagtest_12345_abcde12345',
+        }),
+      }),
+      {
+        headers: {
+          Authorization: 'Bearer prv_test_x',
+        },
+      },
+    );
   });
 });

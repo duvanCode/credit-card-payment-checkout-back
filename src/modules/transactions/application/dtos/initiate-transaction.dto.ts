@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsArray,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -8,91 +9,19 @@ import {
   Matches,
   Min,
   ValidateNested,
-  ValidationArguments,
-  ValidatorConstraint,
-  ValidatorConstraintInterface,
-  registerDecorator,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { validateLuhn } from '../../../../shared/utils/luhn.util';
 
-@ValidatorConstraint({ name: 'isLuhnValid', async: false })
-class IsLuhnValidConstraint implements ValidatorConstraintInterface {
-  validate(value: string): boolean {
-    return validateLuhn(value ?? '');
-  }
-
-  defaultMessage(): string {
-    return 'El numero de tarjeta no supera la validacion Luhn.';
-  }
-}
-
-function IsLuhnValid() {
-  return function (object: object, propertyName: string) {
-    registerDecorator({
-      name: 'isLuhnValid',
-      target: object.constructor,
-      propertyName,
-      validator: IsLuhnValidConstraint,
-    });
-  };
-}
-
-function IsFutureExpiry() {
-  return function (object: object, propertyName: string) {
-    registerDecorator({
-      name: 'isFutureExpiry',
-      target: object.constructor,
-      propertyName,
-      constraints: [],
-      validator: {
-        validate(_value: string, args: ValidationArguments) {
-          const dto = args.object as CardDataDto;
-          const month = Number(dto.expiryMonth);
-          const year = Number(dto.expiryYear);
-
-          if (Number.isNaN(month) || Number.isNaN(year)) {
-            return false;
-          }
-
-          const currentDate = new Date();
-          const currentYear = Number(String(currentDate.getFullYear()).slice(-2));
-          const currentMonth = currentDate.getMonth() + 1;
-
-          return year > currentYear || (year === currentYear && month >= currentMonth);
-        },
-        defaultMessage() {
-          return 'La tarjeta esta vencida.';
-        },
-      },
-    });
-  };
-}
-
-export class CardDataDto {
-  @ApiProperty()
-  @IsString()
-  @Matches(/^\d{13,19}$/)
-  @IsLuhnValid()
-  number!: string;
-
+export class TransactionItemDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  holderName!: string;
+  productId!: string;
 
   @ApiProperty()
-  @Matches(/^(0[1-9]|1[0-2])$/)
-  expiryMonth!: string;
-
-  @ApiProperty()
-  @Matches(/^\d{2}$/)
-  @IsFutureExpiry()
-  expiryYear!: string;
-
-  @ApiProperty()
-  @Matches(/^\d{3,4}$/)
-  cvc!: string;
+  @IsInt()
+  @Min(1)
+  quantity!: number;
 }
 
 export class CustomerDataDto {
@@ -122,19 +51,22 @@ export class CustomerDataDto {
 }
 
 export class InitiateTransactionDto {
-  @ApiProperty()
+  @ApiProperty({ type: [TransactionItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TransactionItemDto)
+  items!: TransactionItemDto[];
+
+  @ApiProperty({
+    example: 'tok_stagtest_12345_abcde12345',
+    description: 'Token de tarjeta generado en el frontend',
+  })
   @IsString()
-  productId!: string;
-
-  @ApiProperty()
-  @IsInt()
-  @Min(1)
-  quantity!: number;
-
-  @ApiProperty({ type: CardDataDto })
-  @ValidateNested()
-  @Type(() => CardDataDto)
-  cardData!: CardDataDto;
+  @IsNotEmpty()
+  @Matches(/^tok_(test|prod|stagtest)_\d+_[a-zA-Z0-9]+$/, {
+    message: 'El token de la tarjeta no es valido.',
+  })
+  cardToken!: string;
 
   @ApiProperty({ type: CustomerDataDto })
   @ValidateNested()

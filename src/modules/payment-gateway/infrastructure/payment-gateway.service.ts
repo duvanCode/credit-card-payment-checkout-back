@@ -5,7 +5,6 @@ import {
   PaymentGatewayPort,
   ProcessPaymentInput,
   ProcessPaymentResult,
-  TokenizeCardInput,
 } from '../application/ports/payment-gateway.port';
 import { generateSignature } from '../../../shared/utils/signature.util';
 import { InvalidCardException } from '../../../shared/exceptions/invalid-card.exception';
@@ -51,30 +50,6 @@ export class PaymentGatewayService implements PaymentGatewayPort {
         response.data?.data?.presigned_acceptance?.acceptance_token ??
         response.data?.data?.presigned_personal_data_auth?.acceptance_token
       );
-    } catch (error) {
-      this.handleError(error);
-    }
-  }
-
-  async tokenizeCard(input: TokenizeCardInput): Promise<string> {
-    try {
-      const response = await this.client.post(
-        '/tokens/cards',
-        {
-          number: input.number,
-          cvc: input.cvc,
-          exp_month: input.expMonth,
-          exp_year: input.expYear,
-          card_holder: input.cardHolder,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.publicKey}`,
-          },
-        },
-      );
-
-      return response.data?.data?.id;
     } catch (error) {
       this.handleError(error);
     }

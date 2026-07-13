@@ -19,6 +19,17 @@ import { ProductNotFoundException } from '../../../../shared/exceptions/product-
 import { InsufficientStockException } from '../../../../shared/exceptions/insufficient-stock.exception';
 import { PaymentRequiredException } from '../../../../shared/exceptions/payment-required.exception';
 import { ApiException } from '../../../../shared/exceptions/api.exception';
+import { TransactionItemDto } from '../dtos/initiate-transaction.dto';
+import { calculateTransactionPricing } from '../utils/pricing.util';
+
+interface PreparedItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  currency: string;
+}
 
 @Injectable()
 export class InitiateTransactionUseCase {
@@ -34,32 +45,27 @@ export class InitiateTransactionUseCase {
   async execute(
     payload: InitiateTransactionDto,
   ): Promise<TransactionResponseDto> {
-    const product = await this.productRepository.findById(payload.productId);
-
-    if (!product) {
-      throw new ProductNotFoundException(payload.productId);
-    }
-
-    const productData = product.toPrimitives();
-
-    if (productData.stock < payload.quantity) {
-      throw new InsufficientStockException(
-        payload.productId,
-        payload.quantity,
-        productData.stock,
-      );
-    }
+    const preparedItems = await this.prepareItems(payload.items);
 
     const reference = this.generateReference();
-    const totalAmount = productData.price * payload.quantity;
+    const subtotalAmount = preparedItems.reduce(
+      (accumulator, item) => accumulator + item.subtotal,
+      0,
+    );
+    const totalAmount = calculateTransactionPricing(subtotalAmount).total;
     const installments = payload.installments ?? 1;
+    const primaryItem = preparedItems[0];
+    const totalQuantity = preparedItems.reduce(
+      (accumulator, item) => accumulator + item.quantity,
+      0,
+    );
 
     const transaction = await this.transactionRepository.create({
       reference,
-      productId: payload.productId,
-      quantity: payload.quantity,
+      productId: primaryItem.productId,
+      quantity: totalQuantity,
       totalAmount,
-      currency: productData.currency,
+      currency: primaryItem.currency,
       status: TransactionStatus.PENDING,
       customerEmail: payload.customerData.email,
       customerName: payload.customerData.fullName,
@@ -67,24 +73,24 @@ export class InitiateTransactionUseCase {
       customerLegalId: payload.customerData.legalId,
       customerLegalIdType: payload.customerData.legalIdType,
       installments,
+      items: preparedItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+      })),
     });
 
     const acceptanceToken = await this.paymentGateway.getAcceptanceToken();
-    const cardToken = await this.paymentGateway.tokenizeCard({
-      number: payload.cardData.number,
-      cvc: payload.cardData.cvc,
-      expMonth: payload.cardData.expiryMonth,
-      expYear: payload.cardData.expiryYear,
-      cardHolder: payload.cardData.holderName,
-    });
 
     const initialResult = await this.paymentGateway.createTransaction({
       reference,
       amountInCents: totalAmount,
-      currency: productData.currency,
+      currency: primaryItem.currency,
       customerEmail: payload.customerData.email,
       installments,
-      cardToken,
+      cardToken: payload.cardToken,
       acceptanceToken,
       customerData: {
         fullName: payload.customerData.fullName,
@@ -105,25 +111,43 @@ export class InitiateTransactionUseCase {
     );
 
     if (finalResult.status === TransactionStatus.APPROVED) {
-      await this.productRepository.decrementStock(payload.productId, payload.quantity);
-      await this.transactionRepository.createDeliveryRecord({
-        transactionId: persisted.toPrimitives().id,
-        productId: payload.productId,
-        quantity: payload.quantity,
-        customerEmail: payload.customerData.email,
-      });
-
       return {
         transactionId: persisted.toPrimitives().id,
+        reference: persisted.toPrimitives().reference,
         gatewayTransactionId: persisted.toPrimitives().gatewayTransactionId,
         status: persisted.toPrimitives().status,
         product: {
-          id: productData.id,
-          name: productData.name,
-          quantity: payload.quantity,
+          id: primaryItem.productId,
+          name:
+            preparedItems.length > 1
+              ? `${primaryItem.productName} y ${preparedItems.length - 1} mas`
+              : primaryItem.productName,
+          quantity: totalQuantity,
         },
         amount: totalAmount,
-        currency: productData.currency,
+        currency: primaryItem.currency,
+        itemsCount: preparedItems.length,
+        createdAt: persisted.toPrimitives().createdAt.toISOString(),
+      };
+    }
+
+    if (finalResult.status === TransactionStatus.PENDING) {
+      return {
+        transactionId: persisted.toPrimitives().id,
+        reference: persisted.toPrimitives().reference,
+        gatewayTransactionId: persisted.toPrimitives().gatewayTransactionId,
+        status: persisted.toPrimitives().status,
+        product: {
+          id: primaryItem.productId,
+          name:
+            preparedItems.length > 1
+              ? `${primaryItem.productName} y ${preparedItems.length - 1} mas`
+              : primaryItem.productName,
+          quantity: totalQuantity,
+        },
+        amount: totalAmount,
+        currency: primaryItem.currency,
+        itemsCount: preparedItems.length,
         createdAt: persisted.toPrimitives().createdAt.toISOString(),
       };
     }
@@ -179,6 +203,52 @@ export class InitiateTransactionUseCase {
 
   private generateReference(): string {
     return `TRX-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  }
+
+  private async prepareItems(items: TransactionItemDto[]): Promise<PreparedItem[]> {
+    if (!items.length) {
+      throw new ApiException(
+        HttpStatus.BAD_REQUEST,
+        'EMPTY_TRANSACTION_ITEMS',
+        'Debes enviar al menos un producto para iniciar la transaccion.',
+      );
+    }
+
+    const normalizedItems = new Map<string, number>();
+
+    for (const item of items) {
+      normalizedItems.set(
+        item.productId,
+        (normalizedItems.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+
+    const preparedItems: PreparedItem[] = [];
+
+    for (const [productId, quantity] of normalizedItems.entries()) {
+      const product = await this.productRepository.findById(productId);
+
+      if (!product) {
+        throw new ProductNotFoundException(productId);
+      }
+
+      const productData = product.toPrimitives();
+
+      if (productData.stock < quantity) {
+        throw new InsufficientStockException(productId, quantity, productData.stock);
+      }
+
+      preparedItems.push({
+        productId: productData.id,
+        productName: productData.name,
+        quantity,
+        unitPrice: productData.price,
+        subtotal: productData.price * quantity,
+        currency: productData.currency,
+      });
+    }
+
+    return preparedItems;
   }
 
   private toDomainStatus(status: ProcessPaymentResult['status']): TransactionStatus {

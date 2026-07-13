@@ -13,4 +13,10 @@ export default () => ({
     eventsKey: process.env.PAYMENT_GATEWAY_EVENTS_KEY ?? '',
     integrityKey: process.env.PAYMENT_GATEWAY_INTEGRITY_KEY ?? '',
   },
+  jobs: {
+    transactionSyncIntervalSeconds: parseInt(
+      process.env.TRANSACTION_SYNC_INTERVAL_SECONDS ?? '300',
+      10,
+    ),
+  },
 });

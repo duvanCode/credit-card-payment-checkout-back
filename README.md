@@ -2,7 +2,7 @@
 
 ## Descripcion
 
-API REST en NestJS para un flujo de checkout con tarjeta de credito. Expone catalogo de productos, consulta de detalle, inicio de transacciones, consulta de estado y health check, integrando una pasarela de pago sandbox mediante tokenizacion de tarjeta y creacion de transacciones.
+API REST en NestJS para un flujo de checkout con tarjeta de credito. Expone catalogo de productos, consulta de detalle, inicio de transacciones, consulta de estado y health check, integrando una pasarela de pago sandbox para procesar transacciones a partir de un `cardToken` generado en el frontend.
 
 ## Requisitos
 
@@ -50,6 +50,7 @@ npm run prisma:seed
 | `PAYMENT_GATEWAY_PRIVATE_KEY` | Llave privada sandbox |
 | `PAYMENT_GATEWAY_EVENTS_KEY` | Llave de eventos sandbox |
 | `PAYMENT_GATEWAY_INTEGRITY_KEY` | Llave de integridad sandbox |
+| `TRANSACTION_SYNC_INTERVAL_SECONDS` | Intervalo en segundos para el job que sincroniza pagos aprobados y descuenta stock |
 
 ## Como correr el proyecto
 
@@ -77,6 +78,7 @@ docker compose up --build
 |---|---|---|
 | `GET` | `/products` | Lista todos los productos |
 | `GET` | `/products/:id` | Retorna detalle de un producto |
+| `GET` | `/transactions` | Lista ordenes recientes |
 | `POST` | `/transactions/initiate` | Inicia y procesa una transaccion |
 | `GET` | `/transactions/:id` | Consulta una transaccion |
 | `GET` | `/health` | Health check |
@@ -85,15 +87,13 @@ docker compose up --build
 
 ```json
 {
-  "productId": "cuid-del-producto",
-  "quantity": 1,
-  "cardData": {
-    "number": "4242424242424242",
-    "holderName": "JOHN DOE",
-    "expiryMonth": "12",
-    "expiryYear": "30",
-    "cvc": "123"
-  },
+  "items": [
+    {
+      "productId": "cuid-del-producto",
+      "quantity": 1
+    }
+  ],
+  "cardToken": "tok_stagtest_12345_abcde12345",
   "customerData": {
     "email": "john@example.com",
     "fullName": "John Doe",
@@ -157,3 +157,4 @@ Se sigue una separacion por modulos y capas:
 - Respuesta uniforme con interceptor `{ success: true, data }`.
 - Errores estructurados con filtro global `{ success: false, error }`.
 - Polling simple del estado de la transaccion para resolver el flujo dentro de `POST /transactions/initiate`.
+- Job de sincronizacion para confirmar pagos aprobados y aplicar stock de forma idempotente.

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import configuration from './config/configuration';
 import { envValidationSchema } from './config/env.validation';
 import { ProductsModule } from './modules/products/products.module';
@@ -14,6 +15,7 @@ import { HealthModule } from './modules/health/health.module';
       load: [configuration],
       validationSchema: envValidationSchema,
     }),
+    ScheduleModule.forRoot(),
     ProductsModule,
     TransactionsModule,
     PaymentGatewayModule,

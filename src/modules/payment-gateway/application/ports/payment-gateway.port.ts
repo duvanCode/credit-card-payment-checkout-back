@@ -1,13 +1,5 @@
 export const PAYMENT_GATEWAY_PORT = 'PAYMENT_GATEWAY_PORT';
 
-export interface TokenizeCardInput {
-  number: string;
-  cvc: string;
-  expMonth: string;
-  expYear: string;
-  cardHolder: string;
-}
-
 export interface ProcessPaymentInput {
   reference: string;
   amountInCents: number;
@@ -32,7 +24,6 @@ export interface ProcessPaymentResult {
 
 export interface PaymentGatewayPort {
   getAcceptanceToken(): Promise<string>;
-  tokenizeCard(input: TokenizeCardInput): Promise<string>;
   createTransaction(input: ProcessPaymentInput): Promise<ProcessPaymentResult>;
   getTransactionStatus(
     transactionId: string,

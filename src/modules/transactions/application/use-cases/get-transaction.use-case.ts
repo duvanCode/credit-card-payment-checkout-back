@@ -1,9 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  PRODUCT_REPOSITORY,
-  ProductRepository,
-} from '../../../products/domain/repositories/product.repository';
-import {
   TRANSACTION_REPOSITORY,
   TransactionRepository,
 } from '../../domain/repositories/transaction.repository';
@@ -15,8 +11,6 @@ export class GetTransactionUseCase {
   constructor(
     @Inject(TRANSACTION_REPOSITORY)
     private readonly transactionRepository: TransactionRepository,
-    @Inject(PRODUCT_REPOSITORY)
-    private readonly productRepository: ProductRepository,
   ) {}
 
   async execute(transactionId: string): Promise<TransactionResponseDto> {
@@ -26,24 +20,30 @@ export class GetTransactionUseCase {
       throw new TransactionNotFoundException(transactionId);
     }
 
-    const product = await this.productRepository.findById(
-      transaction.toPrimitives().productId,
-    );
-
-    const productData = product?.toPrimitives();
     const transactionData = transaction.toPrimitives();
+    const primaryItem = transactionData.items[0];
+    const totalQuantity = transactionData.items.reduce(
+      (accumulator, item) => accumulator + item.quantity,
+      0,
+    );
 
     return {
       transactionId: transactionData.id,
+      reference: transactionData.reference,
       gatewayTransactionId: transactionData.gatewayTransactionId,
       status: transactionData.status,
       product: {
-        id: transactionData.productId,
-        name: productData?.name ?? 'Producto',
-        quantity: transactionData.quantity,
+        id: primaryItem?.productId ?? transactionData.productId,
+        name:
+          primaryItem?.productName ??
+          (transactionData.items.length > 1
+            ? `${transactionData.items.length} productos`
+            : 'Producto'),
+        quantity: totalQuantity || transactionData.quantity,
       },
       amount: transactionData.totalAmount,
       currency: transactionData.currency,
+      itemsCount: transactionData.items.length || 1,
       createdAt: transactionData.createdAt.toISOString(),
     };
   }

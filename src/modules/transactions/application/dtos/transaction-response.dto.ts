@@ -16,6 +16,9 @@ export class TransactionResponseDto {
   @ApiProperty()
   transactionId!: string;
 
+  @ApiProperty()
+  reference!: string;
+
   @ApiProperty({ required: false, nullable: true })
   gatewayTransactionId?: string | null;
 
@@ -30,6 +33,9 @@ export class TransactionResponseDto {
 
   @ApiProperty()
   currency!: string;
+
+  @ApiProperty()
+  itemsCount!: number;
 
   @ApiProperty()
   createdAt!: string;

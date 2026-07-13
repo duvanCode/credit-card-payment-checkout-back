@@ -8,7 +8,9 @@ import { PrismaTransactionRepository } from './infrastructure/repositories/prism
 import { TransactionsController } from './infrastructure/controllers/transactions.controller';
 import { InitiateTransactionUseCase } from './application/use-cases/initiate-transaction.use-case';
 import { GetTransactionUseCase } from './application/use-cases/get-transaction.use-case';
+import { ListTransactionsUseCase } from './application/use-cases/list-transactions.use-case';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
+import { TransactionSyncService } from './infrastructure/jobs/transaction-sync.service';
 
 @Module({
   imports: [ProductsModule, PaymentGatewayModule],
@@ -21,6 +23,8 @@ import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module'
     },
     InitiateTransactionUseCase,
     GetTransactionUseCase,
+    ListTransactionsUseCase,
+    TransactionSyncService,
   ],
 })
 export class TransactionsModule {}
