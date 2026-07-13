@@ -1,6 +1,8 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import express from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { PrismaService } from './shared/database/prisma.service';
 import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
@@ -23,6 +25,7 @@ async function bootstrap() {
     new ResponseFormatInterceptor(),
   );
   app.enableCors();
+  app.use('/imagenes', express.static(join(process.cwd(), 'imagenes')));
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Payment Checkout Backend API')

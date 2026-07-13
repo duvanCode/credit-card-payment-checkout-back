@@ -2,6 +2,14 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const backendPublicUrl = (
+  process.env.BACKEND_PUBLIC_URL ??
+  `http://localhost:${process.env.PORT ?? '3000'}`
+).replace(/\/$/, '');
+
+function getImageUrl(fileName: string) {
+  return `${backendPublicUrl}/imagenes/${fileName}`;
+}
 
 async function main() {
   await prisma.deliveryRecord.deleteMany();
@@ -16,8 +24,7 @@ async function main() {
         price: 350000000,
         currency: 'COP',
         stock: 10,
-        imageUrl:
-          'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=realistic%20premium%20silver%20laptop%20on%20clean%20studio%20background%2C%20ecommerce%20product%20photo%2C%20soft%20shadows&image_size=landscape_4_3',
+        imageUrl: getImageUrl('laptop_pro_15.png'),
         category: 'Electronics',
       },
       {
@@ -26,8 +33,7 @@ async function main() {
         price: 15000000,
         currency: 'COP',
         stock: 25,
-        imageUrl:
-          'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=realistic%20wireless%20headphones%20product%20photo%20on%20neutral%20background%2C%20modern%20ecommerce%20style&image_size=square_hd',
+        imageUrl: getImageUrl('auriculares_bluetooth.png'),
         category: 'Electronics',
       },
       {
@@ -36,8 +42,7 @@ async function main() {
         price: 12000000,
         currency: 'COP',
         stock: 15,
-        imageUrl:
-          'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=realistic%20mechanical%20keyboard%20product%20shot%20on%20clean%20white%20background%2C%20ecommerce%20lighting&image_size=landscape_4_3',
+        imageUrl: getImageUrl('teclado_mecanico.png'),
         category: 'Peripherals',
       },
       {
@@ -46,8 +51,7 @@ async function main() {
         price: 8000000,
         currency: 'COP',
         stock: 30,
-        imageUrl:
-          'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=realistic%20ergonomic%20wireless%20mouse%20product%20photo%20on%20minimal%20background%2C%20ecommerce%20style&image_size=square_hd',
+        imageUrl: getImageUrl('mouse_ergonomico.png'),
         category: 'Peripherals',
       },
     ],
