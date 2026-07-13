@@ -4,6 +4,8 @@ import { TransactionEntity } from '../../domain/entities/transaction.entity';
 import { TransactionStatus } from '../../domain/enums/transaction-status.enum';
 import { InsufficientStockException } from '../../../../shared/exceptions/insufficient-stock.exception';
 import { PaymentRequiredException } from '../../../../shared/exceptions/payment-required.exception';
+import { ApiException } from '../../../../shared/exceptions/api.exception';
+import { ProductNotFoundException } from '../../../../shared/exceptions/product-not-found.exception';
 import { SHIPPING_FEE_IN_CENTS } from '../utils/pricing.util';
 
 const product = new ProductEntity({
@@ -259,4 +261,242 @@ describe('InitiateTransactionUseCase', () => {
 
     expect(result.status).toBe(TransactionStatus.PENDING);
   }, 10000);
+
+  it('lanza ProductNotFound cuando el producto no existe', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(null),
+    };
+    const transactionRepository = {
+      create: jest.fn(),
+      update: jest.fn(),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn(),
+      createTransaction: jest.fn(),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await expect(useCase.execute(payload)).rejects.toBeInstanceOf(
+      ProductNotFoundException,
+    );
+  });
+
+  it('lanza ApiException cuando no se envian items', async () => {
+    const productRepository = {
+      findById: jest.fn(),
+    };
+    const transactionRepository = {
+      create: jest.fn(),
+      update: jest.fn(),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn(),
+      createTransaction: jest.fn(),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await expect(
+      useCase.execute({
+        ...payload,
+        items: [],
+      }),
+    ).rejects.toBeInstanceOf(ApiException);
+  });
+
+  it('lanza ApiException cuando la pasarela retorna ERROR', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(product),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.ERROR)),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.ERROR,
+        rawResponse: { status: 'ERROR' },
+      }),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await expect(useCase.execute(payload)).rejects.toBeInstanceOf(ApiException);
+  });
+
+  it('lanza PaymentRequiredException cuando la pasarela retorna VOIDED', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(product),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.VOIDED)),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.VOIDED,
+        rawResponse: { status: 'VOIDED' },
+      }),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await expect(useCase.execute(payload)).rejects.toBeInstanceOf(
+      PaymentRequiredException,
+    );
+  });
+
+  it('consolida items duplicados por productId', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(product),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
+      applyApprovedEffects: jest.fn().mockResolvedValue(true),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.APPROVED,
+        rawResponse: { status: 'APPROVED' },
+      }),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await useCase.execute({
+      ...payload,
+      items: [
+        { productId: 'prod-1', quantity: 1 },
+        { productId: 'prod-1', quantity: 1 },
+      ],
+    });
+
+    expect(transactionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            productId: 'prod-1',
+            quantity: 2,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('usa installments por defecto cuando no se envia', async () => {
+    const productRepository = {
+      findById: jest.fn().mockResolvedValue(product),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
+      applyApprovedEffects: jest.fn().mockResolvedValue(true),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.APPROVED,
+        rawResponse: { status: 'APPROVED' },
+      }),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    await useCase.execute({
+      ...payload,
+      installments: undefined,
+    });
+
+    expect(gateway.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installments: 1,
+      }),
+    );
+  });
+
+  it('incluye nombre agregado cuando hay multiples items', async () => {
+    const product2 = new ProductEntity({
+      ...product.toPrimitives(),
+      id: 'prod-2',
+      name: 'Mouse',
+    });
+
+    const productRepository = {
+      findById: jest
+        .fn()
+        .mockImplementation(async (id: string) =>
+          id === 'prod-1' ? product : id === 'prod-2' ? product2 : null,
+        ),
+    };
+    const transactionRepository = {
+      create: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.PENDING)),
+      update: jest.fn().mockResolvedValue(createTransactionEntity(TransactionStatus.APPROVED)),
+      applyApprovedEffects: jest.fn().mockResolvedValue(true),
+    };
+    const gateway = {
+      getAcceptanceToken: jest.fn().mockResolvedValue('acceptance-token'),
+      createTransaction: jest.fn().mockResolvedValue({
+        gatewayTransactionId: 'gw-1',
+        status: TransactionStatus.APPROVED,
+        rawResponse: { status: 'APPROVED' },
+      }),
+      getTransactionStatus: jest.fn(),
+    };
+
+    const useCase = new InitiateTransactionUseCase(
+      productRepository as never,
+      transactionRepository as never,
+      gateway as never,
+    );
+
+    const result = await useCase.execute({
+      ...payload,
+      items: [
+        { productId: 'prod-1', quantity: 1 },
+        { productId: 'prod-2', quantity: 1 },
+      ],
+    });
+
+    expect(result.product.name).toBe('Laptop y 1 mas');
+    expect(result.itemsCount).toBe(2);
+  });
 });

@@ -1,86 +1,89 @@
-import { GetTransactionUseCase } from './get-transaction.use-case';
+import { ListTransactionsUseCase } from './list-transactions.use-case';
 import { TransactionEntity } from '../../domain/entities/transaction.entity';
 import { TransactionStatus } from '../../domain/enums/transaction-status.enum';
-import { SHIPPING_FEE_IN_CENTS } from '../utils/pricing.util';
 
-const subtotalAmount = 2000;
-const totalAmount = subtotalAmount + Math.round(subtotalAmount * 0.19) + SHIPPING_FEE_IN_CENTS;
-
-describe('GetTransactionUseCase', () => {
-  it('retorna una transaccion existente', async () => {
-    const transactionRepository = {
-      findById: jest.fn().mockResolvedValue(
+describe('ListTransactionsUseCase', () => {
+  it('mapea usando el item primario y cantidad total', async () => {
+    const repository = {
+      findRecent: jest.fn().mockResolvedValue([
         new TransactionEntity({
           id: 'trx-1',
           gatewayTransactionId: 'gw-1',
           reference: 'TRX-1',
           productId: 'prod-1',
-          quantity: 2,
-          totalAmount,
+          quantity: 3,
+          totalAmount: 3000,
           currency: 'COP',
           status: TransactionStatus.APPROVED,
           customerEmail: 'john@example.com',
-          customerName: 'John Doe',
-          customerPhone: '3001234567',
-          customerLegalId: '123456789',
-          customerLegalIdType: 'CC',
+          customerName: 'John',
+          customerPhone: null,
+          customerLegalId: null,
+          customerLegalIdType: null,
           installments: 1,
-          gatewayResponse: { status: 'APPROVED' },
+          gatewayResponse: null,
           items: [
             {
               id: 'item-1',
               productId: 'prod-1',
               productName: 'Laptop',
+              quantity: 1,
+              unitPrice: 1000,
+              subtotal: 1000,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'item-2',
+              productId: 'prod-2',
+              productName: 'Mouse',
               quantity: 2,
               unitPrice: 1000,
-              subtotal: subtotalAmount,
+              subtotal: 2000,
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
             },
           ],
-          stockProcessedAt: new Date('2026-01-01T01:00:00.000Z'),
+          stockProcessedAt: new Date('2026-01-01T00:00:00.000Z'),
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         }),
-      ),
+      ]),
     };
 
-    const useCase = new GetTransactionUseCase(transactionRepository as never);
+    const useCase = new ListTransactionsUseCase(repository as never);
+    const result = await useCase.execute(12);
 
-    const result = await useCase.execute('trx-1');
-
-    expect(result.transactionId).toBe('trx-1');
-    expect(result.reference).toBe('TRX-1');
-    expect(result.product.name).toBe('Laptop');
-    expect(result.itemsCount).toBe(1);
+    expect(repository.findRecent).toHaveBeenCalledWith(12);
+    expect(result).toEqual([
+      expect.objectContaining({
+        transactionId: 'trx-1',
+        reference: 'TRX-1',
+        itemsCount: 2,
+        product: {
+          id: 'prod-1',
+          name: 'Laptop',
+          quantity: 3,
+        },
+      }),
+    ]);
   });
 
-  it('lanza error si la transaccion no existe', async () => {
-    const transactionRepository = {
-      findById: jest.fn().mockResolvedValue(null),
-    };
-
-    const useCase = new GetTransactionUseCase(transactionRepository as never);
-
-    await expect(useCase.execute('missing')).rejects.toBeDefined();
-  });
-
-  it('retorna fallback si no hay items', async () => {
-    const transactionRepository = {
-      findById: jest.fn().mockResolvedValue(
+  it('si no hay items, retorna fallback de producto', async () => {
+    const repository = {
+      findRecent: jest.fn().mockResolvedValue([
         new TransactionEntity({
           id: 'trx-2',
           gatewayTransactionId: null,
           reference: 'TRX-2',
-          productId: 'prod-2',
+          productId: 'prod-x',
           quantity: 1,
-          totalAmount,
+          totalAmount: 1000,
           currency: 'COP',
           status: TransactionStatus.PENDING,
           customerEmail: 'john@example.com',
-          customerName: 'John Doe',
-          customerPhone: '3001234567',
-          customerLegalId: '123456789',
-          customerLegalIdType: 'CC',
+          customerName: 'John',
+          customerPhone: null,
+          customerLegalId: null,
+          customerLegalIdType: null,
           installments: 1,
           gatewayResponse: null,
           items: [],
@@ -88,33 +91,33 @@ describe('GetTransactionUseCase', () => {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         }),
-      ),
+      ]),
     };
 
-    const useCase = new GetTransactionUseCase(transactionRepository as never);
-    const result = await useCase.execute('trx-2');
+    const useCase = new ListTransactionsUseCase(repository as never);
+    const result = await useCase.execute();
 
-    expect(result.itemsCount).toBe(1);
-    expect(result.product.name).toBe('Producto');
+    expect(result[0].product.name).toBe('Producto');
+    expect(result[0].itemsCount).toBe(1);
   });
 
-  it('usa nombre agregado cuando hay multiples items y falta el nombre del item primario', async () => {
-    const transactionRepository = {
-      findById: jest.fn().mockResolvedValue(
+  it('usa nombre agregado cuando el item primario no tiene nombre', async () => {
+    const repository = {
+      findRecent: jest.fn().mockResolvedValue([
         new TransactionEntity({
           id: 'trx-3',
           gatewayTransactionId: null,
           reference: 'TRX-3',
           productId: 'prod-3',
           quantity: 2,
-          totalAmount,
+          totalAmount: 2000,
           currency: 'COP',
           status: TransactionStatus.PENDING,
           customerEmail: 'john@example.com',
-          customerName: 'John Doe',
-          customerPhone: '3001234567',
-          customerLegalId: '123456789',
-          customerLegalIdType: 'CC',
+          customerName: 'John',
+          customerPhone: null,
+          customerLegalId: null,
+          customerLegalIdType: null,
           installments: 1,
           gatewayResponse: null,
           items: [
@@ -141,13 +144,13 @@ describe('GetTransactionUseCase', () => {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         }),
-      ),
+      ]),
     };
 
-    const useCase = new GetTransactionUseCase(transactionRepository as never);
-    const result = await useCase.execute('trx-3');
+    const useCase = new ListTransactionsUseCase(repository as never);
+    const result = await useCase.execute();
 
-    expect(result.itemsCount).toBe(2);
-    expect(result.product.name).toBe('2 productos');
+    expect(result[0].itemsCount).toBe(2);
+    expect(result[0].product.name).toBe('2 productos');
   });
 });
