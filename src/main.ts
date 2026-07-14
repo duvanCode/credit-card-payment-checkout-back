@@ -11,7 +11,8 @@ import { ResponseFormatInterceptor } from './shared/interceptors/response-format
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.getHttpAdapter().getInstance().set('trust proxy', true);
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -35,6 +36,9 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api', app, document);
+  expressApp.get('/openapi.json', (_req: unknown, res: { json: (body: unknown) => void }) => {
+    res.json(document);
+  });
 
   const prismaService = app.get(PrismaService);
   await prismaService.enableShutdownHooks(app);

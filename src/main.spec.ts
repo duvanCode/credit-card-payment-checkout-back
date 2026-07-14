@@ -22,6 +22,7 @@ describe('main bootstrap', () => {
       enableShutdownHooks: jest.fn().mockResolvedValue(undefined),
     };
     const expressAppMock = {
+      get: jest.fn(),
       set: jest.fn(),
     };
 
@@ -82,6 +83,10 @@ describe('main bootstrap', () => {
 
     expect(createMock).toHaveBeenCalledWith(expect.any(Function));
     expect(expressAppMock.set).toHaveBeenCalledWith('trust proxy', true);
+    expect(expressAppMock.get).toHaveBeenCalledWith(
+      '/openapi.json',
+      expect.any(Function),
+    );
     expect(appMock.useGlobalPipes).toHaveBeenCalledTimes(1);
     expect(appMock.useGlobalFilters).toHaveBeenCalledTimes(1);
     expect(appMock.useGlobalInterceptors).toHaveBeenCalledTimes(1);
@@ -115,6 +120,7 @@ describe('main bootstrap', () => {
       enableShutdownHooks: jest.fn().mockResolvedValue(undefined),
     };
     const expressAppMock = {
+      get: jest.fn(),
       set: jest.fn(),
     };
 
