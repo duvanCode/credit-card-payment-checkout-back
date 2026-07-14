@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.trae
+.dbg
+.jest-cache
+.env
+.env.*
+!.env.example
+npm-debug.log
+yarn-error.log
+debug-*.md
