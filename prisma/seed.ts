@@ -2,14 +2,6 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const backendPublicUrl = (
-  process.env.BACKEND_PUBLIC_URL ??
-  `http://localhost:${process.env.PORT ?? '3000'}`
-).replace(/\/$/, '');
-
-function getImageUrl(fileName: string) {
-  return `${backendPublicUrl}/imagenes/${fileName}`;
-}
 
 async function main() {
   await prisma.deliveryRecord.deleteMany();
@@ -24,7 +16,7 @@ async function main() {
         price: 350000000,
         currency: 'COP',
         stock: 10,
-        imageUrl: getImageUrl('laptop_pro_15.png'),
+        imageUrl: 'laptop_pro_15.png',
         category: 'Electronics',
       },
       {
@@ -33,7 +25,7 @@ async function main() {
         price: 15000000,
         currency: 'COP',
         stock: 25,
-        imageUrl: getImageUrl('auriculares_bluetooth.png'),
+        imageUrl: 'auriculares_bluetooth.png',
         category: 'Electronics',
       },
       {
@@ -42,7 +34,7 @@ async function main() {
         price: 12000000,
         currency: 'COP',
         stock: 15,
-        imageUrl: getImageUrl('teclado_mecanico.png'),
+        imageUrl: 'teclado_mecanico.png',
         category: 'Peripherals',
       },
       {
@@ -51,7 +43,7 @@ async function main() {
         price: 8000000,
         currency: 'COP',
         stock: 30,
-        imageUrl: getImageUrl('mouse_ergonomico.png'),
+        imageUrl: 'mouse_ergonomico.png',
         category: 'Peripherals',
       },
     ],

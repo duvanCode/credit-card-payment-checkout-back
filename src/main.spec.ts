@@ -8,6 +8,7 @@ describe('main bootstrap', () => {
     process.env.PORT = '3101';
 
     const appMock = {
+      getHttpAdapter: jest.fn(),
       useGlobalPipes: jest.fn(),
       useGlobalFilters: jest.fn(),
       useGlobalInterceptors: jest.fn(),
@@ -20,8 +21,14 @@ describe('main bootstrap', () => {
     const prismaServiceMock = {
       enableShutdownHooks: jest.fn().mockResolvedValue(undefined),
     };
+    const expressAppMock = {
+      set: jest.fn(),
+    };
 
     appMock.get.mockReturnValue(prismaServiceMock);
+    appMock.getHttpAdapter.mockReturnValue({
+      getInstance: jest.fn().mockReturnValue(expressAppMock),
+    });
 
     const createMock = jest.fn().mockResolvedValue(appMock);
 
@@ -74,6 +81,7 @@ describe('main bootstrap', () => {
     });
 
     expect(createMock).toHaveBeenCalledWith(expect.any(Function));
+    expect(expressAppMock.set).toHaveBeenCalledWith('trust proxy', true);
     expect(appMock.useGlobalPipes).toHaveBeenCalledTimes(1);
     expect(appMock.useGlobalFilters).toHaveBeenCalledTimes(1);
     expect(appMock.useGlobalInterceptors).toHaveBeenCalledTimes(1);
@@ -93,6 +101,7 @@ describe('main bootstrap', () => {
     delete process.env.PORT;
 
     const appMock = {
+      getHttpAdapter: jest.fn(),
       useGlobalPipes: jest.fn(),
       useGlobalFilters: jest.fn(),
       useGlobalInterceptors: jest.fn(),
@@ -105,8 +114,14 @@ describe('main bootstrap', () => {
     const prismaServiceMock = {
       enableShutdownHooks: jest.fn().mockResolvedValue(undefined),
     };
+    const expressAppMock = {
+      set: jest.fn(),
+    };
 
     appMock.get.mockReturnValue(prismaServiceMock);
+    appMock.getHttpAdapter.mockReturnValue({
+      getInstance: jest.fn().mockReturnValue(expressAppMock),
+    });
 
     const createMock = jest.fn().mockResolvedValue(appMock);
 
