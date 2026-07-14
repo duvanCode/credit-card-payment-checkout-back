@@ -2,14 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     container_name: checkout-postgres
+    command: ['postgres', '-p', '5422']
     environment:
       POSTGRES_DB: credit_card_checkout
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - '5432:5432'
+      - '5422:5422'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - credit-card-payment-checkout-back_postgres_data:/var/lib/postgresql/data
 
   backend:
     build:
@@ -19,11 +20,11 @@ services:
     depends_on:
       - db
     ports:
-      - '3000:3000'
+      - '3210:3210'
     environment:
-      PORT: 3000
+      PORT: 3210
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/credit_card_checkout?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@db:5422/credit_card_checkout?schema=public
       PAYMENT_GATEWAY_SANDBOX_URL: ${PAYMENT_GATEWAY_SANDBOX_URL}
       PAYMENT_GATEWAY_PUBLIC_KEY: ${PAYMENT_GATEWAY_PUBLIC_KEY}
       PAYMENT_GATEWAY_PRIVATE_KEY: ${PAYMENT_GATEWAY_PRIVATE_KEY}
@@ -31,10 +32,10 @@ services:
       PAYMENT_GATEWAY_INTEGRITY_KEY: ${PAYMENT_GATEWAY_INTEGRITY_KEY}
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      test: ['CMD', 'curl', '-f', 'http://localhost:3210/health']
       interval: 30s
       timeout: 10s
       retries: 3
 
 volumes:
-  postgres_data:
+  credit-card-payment-checkout-back_postgres_data:
